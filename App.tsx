@@ -9,14 +9,17 @@ import {
   Settings, 
   FileText, 
   ShieldCheck,
-  BarChart3
+  BarChart3,
+  Search
 } from 'lucide-react';
 import Dashboard from './views/Dashboard';
 import SubjectList from './views/SubjectList';
+import SubjectDetail from './views/SubjectDetail';
 import StudyTimer from './views/StudyTimer';
 import HistoryView from './views/HistoryView';
 import ArchDocs from './views/ArchDocs';
 import PerformanceView from './views/PerformanceView';
+import ExamsView from './views/ExamsView';
 
 const SidebarItem: React.FC<{ to: string; icon: React.ReactNode; label: string; active: boolean }> = ({ to, icon, label, active }) => (
   <Link 
@@ -51,7 +54,8 @@ const AppContent: React.FC = () => {
 
         <nav className="flex-1 space-y-2">
           <SidebarItem to="/" icon={<LayoutDashboard size={20} />} label="Dashboard" active={location.pathname === '/'} />
-          <SidebarItem to="/subjects" icon={<BookOpen size={20} />} label="Disciplinas" active={location.pathname === '/subjects'} />
+          <SidebarItem to="/exams" icon={<Search size={20} />} label="Editais" active={location.pathname === '/exams'} />
+          <SidebarItem to="/subjects" icon={<BookOpen size={20} />} label="Plano de Estudos" active={location.pathname.startsWith('/subjects')} />
           <SidebarItem to="/performance" icon={<BarChart3 size={20} />} label="Desempenho" active={location.pathname === '/performance'} />
           <SidebarItem to="/timer" icon={<Timer size={20} />} label="Cronômetro" active={location.pathname === '/timer'} />
           <SidebarItem to="/history" icon={<History size={20} />} label="Histórico" active={location.pathname === '/history'} />
@@ -68,7 +72,9 @@ const AppContent: React.FC = () => {
         <div className="max-w-7xl mx-auto">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/exams" element={<ExamsView />} />
             <Route path="/subjects" element={<SubjectList />} />
+            <Route path="/subjects/:id" element={<SubjectDetail />} />
             <Route path="/performance" element={<PerformanceView />} />
             <Route path="/timer" element={<StudyTimer />} />
             <Route path="/history" element={<HistoryView />} />
@@ -82,10 +88,10 @@ const AppContent: React.FC = () => {
       {/* Mobile Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 flex justify-around p-3 z-50">
           <Link to="/" className={`p-2 transition-transform active:scale-125 ${location.pathname === '/' ? 'text-blue-500' : 'text-slate-400'}`}><LayoutDashboard size={24} /></Link>
-          <Link to="/subjects" className={`p-2 transition-transform active:scale-125 ${location.pathname === '/subjects' ? 'text-blue-500' : 'text-slate-400'}`}><BookOpen size={24} /></Link>
+          <Link to="/exams" className={`p-2 transition-transform active:scale-125 ${location.pathname === '/exams' ? 'text-blue-500' : 'text-slate-400'}`}><Search size={24} /></Link>
+          <Link to="/subjects" className={`p-2 transition-transform active:scale-125 ${location.pathname.startsWith('/subjects') ? 'text-blue-500' : 'text-slate-400'}`}><BookOpen size={24} /></Link>
           <Link to="/performance" className={`p-2 transition-transform active:scale-125 ${location.pathname === '/performance' ? 'text-blue-500' : 'text-slate-400'}`}><BarChart3 size={24} /></Link>
           <Link to="/timer" className={`p-2 transition-transform active:scale-125 ${location.pathname === '/timer' ? 'text-blue-500' : 'text-slate-400'}`}><Timer size={24} /></Link>
-          <Link to="/arch" className={`p-2 transition-transform active:scale-125 ${location.pathname === '/arch' ? 'text-blue-500' : 'text-slate-400'}`}><FileText size={24} /></Link>
       </nav>
     </div>
   );
