@@ -88,6 +88,10 @@ const ExamsView: React.FC = () => {
   }, []);
 
   const syncSyllabusFromSource = async (exam: Exam): Promise<Record<string, { title: string, weight: number }[]>> => {
+    if (!process.env.API_KEY) {
+      throw new Error("Conexão com a base de dados não configurada corretamente (API Key ausente).");
+    }
+
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `Você é um especialista em concursos policiais. Sua tarefa é fornecer o conteúdo programático verticalizado do concurso "${exam.name}" (Banca: ${exam.institution}) consultando exclusivamente os padrões do site pciconcursos.com.br. 
@@ -121,15 +125,11 @@ const ExamsView: React.FC = () => {
       });
       return JSON.parse(response.text || '{}');
     } catch (error) {
-      console.error(error);
-      throw error;
+      console.error("Falha na sincronização de edital:", error);
+      throw new Error("Erro na comunicação com a base de dados do edital. Tente novamente.");
     }
   };
 
-  /**
-   * Helper para preencher as sessões respeitando a regra de não repetição consecutiva
-   * (exceto para matérias FRACAS) e GARANTINDO que não haja repetição no mesmo dia.
-   */
   const distributeSubjectsToSessions = (
     daysToFill: number, 
     subsPerDay: number, 
@@ -148,7 +148,6 @@ const ExamsView: React.FC = () => {
         let found = false;
         let attempt = 0;
         
-        // Regra 1: Não repetir no mesmo dia E (Não repetir dia anterior OU ser Fraca)
         while (!found && attempt < workingPool.length) {
           const candidate = workingPool[attempt];
           const classification = performanceMap[candidate]?.classification || 'REGULAR';
@@ -157,12 +156,9 @@ const ExamsView: React.FC = () => {
           const inToday = selectedForToday.includes(candidate);
           const inYesterday = lastDaySubjectNames.includes(candidate);
           
-          // CRÍTICO: NUNCA repetir no mesmo dia.
           if (!inToday) {
-            // Regra secundária: Rotação entre dias.
             if (!inYesterday || isWeak) {
               selectedForToday.push(candidate);
-              // Move para o final da pool para garantir rotação.
               workingPool.splice(attempt, 1);
               workingPool.push(candidate);
               found = true;
@@ -174,8 +170,6 @@ const ExamsView: React.FC = () => {
           }
         }
 
-        // Regra 2 (Fallback): Se todas as disponíveis hoje estiverem na "regra do dia anterior", 
-        // ignora a regra do dia anterior mas MANTÉM a proibição de repetição no mesmo dia.
         if (!found) {
           attempt = 0;
           while (!found && attempt < workingPool.length) {
@@ -193,7 +187,6 @@ const ExamsView: React.FC = () => {
           }
         }
 
-        // Adiciona ao dia (se found for true)
         if (found) {
           daySubjects.push({
             name: selectedForToday[selectedForToday.length - 1],
@@ -212,25 +205,26 @@ const ExamsView: React.FC = () => {
 
   const generatePlanPreview = async () => {
     if (!selectedExam || isSyncing) return;
+    
     setIsSyncing(true);
     setSyncError(null);
 
-    const hoursPerDay = totalWeeklyHours / daysPerWeek;
-    const availableBlocks = Math.floor((hoursPerDay * 60) / BLOCK_DURATION_MINUTES);
-    
-    if (subjectsPerDay > availableBlocks) {
-      setSyncError(`ERRO DE CAPACIDADE: ${hoursPerDay.toFixed(1)}h por dia permitem no máximo ${availableBlocks} matérias organizadas. Diminua a quantidade de matérias por dia.`);
-      setIsSyncing(false);
-      return;
-    }
+    // Pequeno delay artificial para garantir que o estado de loading seja perceptível e o clique seja bloqueado
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     try {
-      if (cycleMode === CycleMode.MANUAL && manualSequence.length === 0) {
-        setSyncError("Defina pelo menos uma matéria para o ciclo manual.");
-        setIsSyncing(false);
-        return;
+      const hoursPerDay = totalWeeklyHours / daysPerWeek;
+      const availableBlocks = Math.floor((hoursPerDay * 60) / BLOCK_DURATION_MINUTES);
+      
+      if (subjectsPerDay > availableBlocks) {
+        throw new Error(`ERRO DE CAPACIDADE: ${hoursPerDay.toFixed(1)}h por dia permitem no máximo ${availableBlocks} matérias organizadas. Diminua a quantidade de matérias por dia.`);
       }
 
+      if (cycleMode === CycleMode.MANUAL && manualSequence.length === 0) {
+        throw new Error("Defina pelo menos uma matéria para o ciclo manual.");
+      }
+
+      // Sincronização com AI
       const syllabus = await syncSyllabusFromSource(selectedExam);
       setSyllabusData(syllabus);
       
@@ -246,7 +240,6 @@ const ExamsView: React.FC = () => {
         shuffledPool = [...manualSequence];
       }
 
-      // Distribuição inteligente com regra de não repetição no dia
       const sessions = distributeSubjectsToSessions(daysPerWeek, subjectsPerDay, shuffledPool);
 
       const tempPlan: StudyPlan = {
@@ -266,9 +259,9 @@ const ExamsView: React.FC = () => {
 
       setPreviewPlan(tempPlan);
       setModalStep('preview');
-      setIsSyncing(false);
-    } catch (err) {
-      setSyncError("Não foi possível gerar o ciclo. Verifique sua conexão e tente novamente.");
+    } catch (err: any) {
+      setSyncError(err.message || "Não foi possível gerar o ciclo. Verifique sua conexão e tente novamente.");
+    } finally {
       setIsSyncing(false);
     }
   };
@@ -312,7 +305,6 @@ const ExamsView: React.FC = () => {
 
       const shuffledPool = pool.sort(() => Math.random() - 0.5);
 
-      // Distribuição adaptativa: matérias fracas podem repetir na semana, mas NUNCA no mesmo dia.
       const newSessions = distributeSubjectsToSessions(
         activePlan.daysPerWeek, 
         activePlan.subjectsPerDay, 
@@ -516,7 +508,7 @@ const ExamsView: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {EXAMS.map(exam => (
-            <div key={exam.id} onClick={() => { setSelectedExam(exam); setManualSequence([]); }} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-blue-500/50 transition-all cursor-pointer group shadow-xl flex flex-col">
+            <div key={exam.id} onClick={() => { setSelectedExam(exam); setManualSequence([]); setModalStep('config'); }} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-blue-500/50 transition-all cursor-pointer group shadow-xl flex flex-col">
               <div className="bg-blue-500/10 w-12 h-12 rounded-xl flex items-center justify-center text-blue-500 mb-4 group-hover:scale-110 transition-transform"><Zap size={24} /></div>
               <h3 className="text-xl font-bold mb-1 leading-tight">{exam.name}</h3>
               <p className="text-slate-500 text-sm mb-4">{exam.institution}</p>
@@ -635,13 +627,20 @@ const ExamsView: React.FC = () => {
                     </div>
                   </div>
 
+                  {syncError && (
+                    <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center gap-3 animate-in">
+                      <AlertCircle className="text-red-500 shrink-0" size={20} />
+                      <p className="text-xs text-red-400 font-bold">{syncError}</p>
+                    </div>
+                  )}
+
                   <button 
                     disabled={isSyncing}
                     onClick={() => {
                       if (cycleMode === CycleMode.MANUAL) setModalStep('manualCycle');
                       else generatePlanPreview();
                     }}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active-scale"
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active-scale shadow-lg shadow-blue-900/20"
                   >
                     {isSyncing ? (
                       <>
@@ -695,10 +694,17 @@ const ExamsView: React.FC = () => {
                     </div>
                   </div>
 
+                  {syncError && (
+                    <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center gap-3 animate-in">
+                      <AlertCircle className="text-red-500 shrink-0" size={20} />
+                      <p className="text-xs text-red-400 font-bold">{syncError}</p>
+                    </div>
+                  )}
+
                   <button 
                     onClick={generatePlanPreview}
                     disabled={manualSequence.length === 0 || isSyncing}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active-scale"
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active-scale shadow-lg shadow-blue-900/20"
                   >
                     {isSyncing ? (
                       <>
@@ -719,7 +725,7 @@ const ExamsView: React.FC = () => {
                    {isSyncing ? (
                      <div className="flex flex-col items-center justify-center py-10 space-y-4">
                         <Loader2 className="text-blue-500 animate-spin" size={48} />
-                        <p className="text-sm font-bold text-slate-400">GERANDO CICLO DE ESTUDOS...</p>
+                        <p className="text-sm font-bold text-slate-400">FINALIZANDO ESTRUTURA...</p>
                      </div>
                    ) : (
                      <>

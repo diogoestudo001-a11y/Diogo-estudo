@@ -10,7 +10,7 @@ import {
   Clock3,
   ChevronRight,
   X,
-  RotateCcw,
+  RotateCcw, 
   Trash2,
   Edit2,
   Calendar,
@@ -28,7 +28,10 @@ import {
   TrendingUp,
   AlertCircle,
   BarChart3,
-  TrendingDown
+  TrendingDown,
+  ChevronDown,
+  ChevronUp,
+  ListFilter
 } from 'lucide-react';
 import { DifficultyLevel, Subject, Topic, TopicStatus, StudyPlan, StudyPlanSession } from '../types';
 import Tooltip from '../components/Tooltip';
@@ -66,12 +69,35 @@ const SubjectList: React.FC = () => {
   const [isUpdatingCycle, setIsUpdatingCycle] = useState(false);
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
 
+  // Estado para controlar quais matérias estão expandidas na aba Desempenho
+  const [expandedSubjects, setExpandedSubjects] = useState<Record<number, boolean>>({});
+  // Estado para armazenar os tópicos das matérias do plano atual (carregados sob demanda ou ao abrir a aba)
+  const [planTopics, setPlanTopics] = useState<Record<number, Topic[]>>({});
+
   useEffect(() => {
     const saved = localStorage.getItem('elite_study_subjects');
     if (saved) setSubjects(JSON.parse(saved));
     const savedPlans = localStorage.getItem('elite_study_plans');
     if (savedPlans) setPlans(JSON.parse(savedPlans));
   }, []);
+
+  // Carregar tópicos quando a aba Desempenho for aberta
+  useEffect(() => {
+    if (activeFolder === 'desempenho' && selectedPlanId) {
+      const currentPlanSubjects = subjects.filter(s => s.examId === selectedPlanId);
+      const topicsData: Record<number, Topic[]> = {};
+      
+      currentPlanSubjects.forEach(sub => {
+        const savedTopics = localStorage.getItem(`elite_study_topics_${sub.id}`);
+        if (savedTopics) {
+          topicsData[sub.id] = JSON.parse(savedTopics);
+        } else {
+          topicsData[sub.id] = [];
+        }
+      });
+      setPlanTopics(topicsData);
+    }
+  }, [activeFolder, selectedPlanId, subjects]);
 
   const openAddModal = () => {
     setEditingSubject(null);
@@ -109,6 +135,8 @@ const SubjectList: React.FC = () => {
       const updated = subjects.map(s => s.id === id ? { ...s, completedTopics: 0, progresso: 0, certas: 0, erradas: 0 } : s);
       setSubjects(updated);
       localStorage.setItem('elite_study_subjects', JSON.stringify(updated));
+      // Também zerar tópicos se existirem
+      localStorage.setItem(`elite_study_topics_${id}`, JSON.stringify([]));
     }
     setActiveMenu(null);
   };
@@ -118,6 +146,7 @@ const SubjectList: React.FC = () => {
       const updated = subjects.filter(s => s.id !== id);
       setSubjects(updated);
       localStorage.setItem('elite_study_subjects', JSON.stringify(updated));
+      localStorage.removeItem(`elite_study_topics_${id}`);
     }
     setActiveMenu(null);
   };
@@ -224,11 +253,31 @@ const SubjectList: React.FC = () => {
     }
   };
 
-  const handleUpdateSubjectPerformance = (subjectId: number, field: 'certas' | 'erradas', val: string) => {
+  // NOVA LÓGICA: Atualizar desempenho por tópico e recalcular total da matéria
+  const handleUpdateTopicPerformance = (subjectId: number, topicId: number, field: 'certas' | 'erradas', val: string) => {
     const numValue = Math.max(0, parseInt(val) || 0);
-    const updated = subjects.map(s => s.id === subjectId ? { ...s, [field]: numValue } : s);
-    setSubjects(updated);
-    localStorage.setItem('elite_study_subjects', JSON.stringify(updated));
+    
+    // 1. Atualizar o tópico no estado local e no localStorage
+    const currentTopics = planTopics[subjectId] || [];
+    const updatedTopics = currentTopics.map(t => t.id === topicId ? { ...t, [field]: numValue } : t);
+    
+    setPlanTopics(prev => ({ ...prev, [subjectId]: updatedTopics }));
+    localStorage.setItem(`elite_study_topics_${subjectId}`, JSON.stringify(updatedTopics));
+
+    // 2. Recalcular os totais da matéria baseados nos tópicos
+    const totalCertas = updatedTopics.reduce((acc, t) => acc + (t.certas || 0), 0);
+    const totalErradas = updatedTopics.reduce((acc, t) => acc + (t.erradas || 0), 0);
+    
+    // 3. Atualizar a matéria principal no estado global de subjects
+    const updatedSubjects = subjects.map(s => {
+      if (s.id === subjectId) {
+        return { ...s, certas: totalCertas, erradas: totalErradas };
+      }
+      return s;
+    });
+    
+    setSubjects(updatedSubjects);
+    localStorage.setItem('elite_study_subjects', JSON.stringify(updatedSubjects));
   };
 
   const calculatePercent = (certas: number, erradas: number) => {
@@ -241,6 +290,10 @@ const SubjectList: React.FC = () => {
     if (percent >= 80) return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
     if (percent >= 60) return 'text-orange-500 bg-orange-500/10 border-orange-500/20';
     return 'text-red-500 bg-red-500/10 border-red-500/20';
+  };
+
+  const toggleExpand = (subjectId: number) => {
+    setExpandedSubjects(prev => ({ ...prev, [subjectId]: !prev[subjectId] }));
   };
 
   const currentPlan = plans.find(p => p.examId === selectedPlanId);
@@ -413,52 +466,123 @@ const SubjectList: React.FC = () => {
             <table className="w-full text-left">
               <thead className="text-[10px] text-slate-500 font-black uppercase bg-slate-800/50">
                 <tr>
-                  <th className="px-6 py-4">Matéria</th>
-                  <th className="px-6 py-4 text-center">Certas</th>
-                  <th className="px-6 py-4 text-center">Erradas</th>
+                  <th className="px-6 py-4">Matéria (Expanda p/ tópicos)</th>
+                  <th className="px-6 py-4 text-center">Certas (Total)</th>
+                  <th className="px-6 py-4 text-center">Erradas (Total)</th>
                   <th className="px-6 py-4 text-center">Rendimento</th>
+                  <th className="px-4 py-4"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {planSubjects.map(sub => {
                   const percent = calculatePercent(sub.certas || 0, sub.erradas || 0);
                   const colorClass = getStatusColor(percent);
+                  const isExpanded = expandedSubjects[sub.id];
+                  const topics = planTopics[sub.id] || [];
+
                   return (
-                    <tr key={sub.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                          <span className="font-bold text-sm text-slate-200">{sub.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex justify-center">
-                          <input 
-                            type="number" 
-                            value={sub.certas || 0}
-                            onChange={(e) => handleUpdateSubjectPerformance(sub.id, 'certas', e.target.value)}
-                            className="w-16 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-center text-emerald-400 font-mono text-sm outline-none focus:border-emerald-500 transition-colors"
-                          />
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex justify-center">
-                          <input 
-                            type="number" 
-                            value={sub.erradas || 0}
-                            onChange={(e) => handleUpdateSubjectPerformance(sub.id, 'erradas', e.target.value)}
-                            className="w-16 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-center text-red-400 font-mono text-sm outline-none focus:border-red-500 transition-colors"
-                          />
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col items-center">
-                          <div className={`px-2 py-1 rounded text-[10px] font-black font-mono border ${colorClass}`}>
-                            {Math.round(percent)}%
+                    <React.Fragment key={sub.id}>
+                      <tr 
+                        className={`hover:bg-slate-800/30 transition-colors cursor-pointer ${isExpanded ? 'bg-slate-800/20' : ''}`}
+                        onClick={() => toggleExpand(sub.id)}
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                            <span className="font-bold text-sm text-slate-200">{sub.name}</span>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="px-6 py-4 text-center font-mono text-emerald-400 font-bold text-sm">
+                           {sub.certas || 0}
+                        </td>
+                        <td className="px-6 py-4 text-center font-mono text-red-400 font-bold text-sm">
+                           {sub.erradas || 0}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col items-center">
+                            <div className={`px-2 py-1 rounded text-[10px] font-black font-mono border ${colorClass}`}>
+                              {Math.round(percent)}%
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                           <div className="text-slate-500">
+                             {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                           </div>
+                        </td>
+                      </tr>
+                      
+                      {isExpanded && (
+                        <tr className="bg-slate-950/40 animate-in slide-in-from-top-2">
+                          <td colSpan={5} className="p-0">
+                             <div className="border-l-4 border-blue-600/50">
+                               <table className="w-full text-left">
+                                 <thead className="bg-slate-900/50 text-[9px] font-black text-slate-500 uppercase">
+                                   <tr>
+                                     <th className="px-10 py-2">Tópico (Edital Verticalizado)</th>
+                                     <th className="px-4 py-2 text-center w-24">Certas</th>
+                                     <th className="px-4 py-2 text-center w-24">Erradas</th>
+                                     <th className="px-4 py-2 text-center w-32">Rendimento</th>
+                                   </tr>
+                                 </thead>
+                                 <tbody className="divide-y divide-slate-800/50">
+                                   {topics.map(topic => {
+                                     const tPercent = calculatePercent(topic.certas || 0, topic.erradas || 0);
+                                     const tColor = getStatusColor(tPercent);
+                                     return (
+                                       <tr key={topic.id} className="hover:bg-slate-800/40 transition-colors">
+                                         <td className="px-10 py-3">
+                                           <div className="flex items-center gap-2">
+                                             <ListFilter size={12} className="text-slate-600" />
+                                             <span className="text-xs text-slate-400 font-medium">{topic.title}</span>
+                                           </div>
+                                         </td>
+                                         <td className="px-4 py-3">
+                                           <div className="flex justify-center">
+                                             <input 
+                                               type="number" 
+                                               value={topic.certas || 0}
+                                               onClick={(e) => e.stopPropagation()}
+                                               onChange={(e) => handleUpdateTopicPerformance(sub.id, topic.id, 'certas', e.target.value)}
+                                               className="w-16 bg-slate-950/80 border border-slate-800 rounded px-1.5 py-0.5 text-center text-emerald-400 font-mono text-xs outline-none focus:border-emerald-500 transition-colors"
+                                             />
+                                           </div>
+                                         </td>
+                                         <td className="px-4 py-3">
+                                           <div className="flex justify-center">
+                                             <input 
+                                               type="number" 
+                                               value={topic.erradas || 0}
+                                               onClick={(e) => e.stopPropagation()}
+                                               onChange={(e) => handleUpdateTopicPerformance(sub.id, topic.id, 'erradas', e.target.value)}
+                                               className="w-16 bg-slate-950/80 border border-slate-800 rounded px-1.5 py-0.5 text-center text-red-400 font-mono text-xs outline-none focus:border-red-500 transition-colors"
+                                             />
+                                           </div>
+                                         </td>
+                                         <td className="px-4 py-3">
+                                            <div className="flex justify-center">
+                                              <div className={`px-2 py-0.5 rounded text-[9px] font-black font-mono border ${tColor}`}>
+                                                {Math.round(tPercent)}%
+                                              </div>
+                                            </div>
+                                         </td>
+                                       </tr>
+                                     );
+                                   })}
+                                   {topics.length === 0 && (
+                                     <tr>
+                                       <td colSpan={4} className="px-10 py-4 text-center text-[10px] text-slate-600 font-bold uppercase italic">
+                                         Nenhum tópico cadastrado para detalhamento.
+                                       </td>
+                                     </tr>
+                                   )}
+                                 </tbody>
+                               </table>
+                             </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -467,7 +591,7 @@ const SubjectList: React.FC = () => {
           <div className="bg-blue-600/5 p-4 rounded-xl border border-blue-500/10 flex items-center gap-3">
              <AlertCircle className="text-blue-500 shrink-0" size={18} />
              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed">
-               Este rendimento é exclusivo para o concurso {currentPlan?.examName}. Os dados registrados aqui ajustam automaticamente a frequência das matérias no seu Ciclo de Estudos Inteligente.
+               Este rendimento é baseado nos subtópicos do edital verticalizado. O total da matéria é a soma de todos os acertos e erros registrados nos tópicos acima.
              </p>
           </div>
         </div>

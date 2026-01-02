@@ -10,74 +10,63 @@ import {
   ChevronUp,
   Target,
   BookOpen,
-  Info
+  Info,
+  Layers,
+  TrendingDown,
+  Minus
 } from 'lucide-react';
 import Tooltip from '../components/Tooltip';
-import { Subject, Topic } from '../types';
+import { Subject, Topic, StudyPlan } from '../types';
+
+interface GroupedSubject {
+  name: string;
+  certas: number;
+  erradas: number;
+  plans: string[];
+  color: string;
+}
 
 const PerformanceView: React.FC = () => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [expandedSubject, setExpandedSubject] = useState<number | null>(null);
-  const [topicsMap, setTopicsMap] = useState<Record<number, Topic[]>>({});
+  const [plans, setPlans] = useState<StudyPlan[]>([]);
+  const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('elite_study_subjects');
     if (saved) {
       setSubjects(JSON.parse(saved));
     }
+    const savedPlans = localStorage.getItem('elite_study_plans');
+    if (savedPlans) {
+      setPlans(JSON.parse(savedPlans));
+    }
   }, []);
 
-  const toggleExpand = (subjectId: number) => {
-    if (expandedSubject === subjectId) {
-      setExpandedSubject(null);
+  // Consolidação automática e silenciosa dos dados por nome de matéria (Case Insensitive)
+  const groupedSubjects: GroupedSubject[] = subjects.reduce((acc, curr) => {
+    const subjectNameNormalized = curr.name.trim();
+    const existing = acc.find(item => item.name.toLowerCase() === subjectNameNormalized.toLowerCase());
+    
+    const plan = plans.find(p => p.examId === curr.examId);
+    const planName = plan ? plan.examName : 'Geral';
+
+    if (existing) {
+      existing.certas += (curr.certas || 0);
+      existing.erradas += (curr.erradas || 0);
+      if (!existing.plans.includes(planName)) {
+        existing.plans.push(planName);
+      }
     } else {
-      setExpandedSubject(subjectId);
-      // Sincronização automática: Carrega os assuntos definidos na aba Disciplinas
-      const savedTopics = localStorage.getItem(`elite_study_topics_${subjectId}`);
-      if (savedTopics) {
-        setTopicsMap(prev => ({
-          ...prev,
-          [subjectId]: JSON.parse(savedTopics)
-        }));
-      } else {
-        setTopicsMap(prev => ({
-          ...prev,
-          [subjectId]: []
-        }));
-      }
+      acc.push({
+        name: subjectNameNormalized,
+        certas: curr.certas || 0,
+        erradas: curr.erradas || 0,
+        plans: [planName],
+        color: curr.color || 'text-blue-500'
+      });
     }
-  };
-
-  const handleTopicUpdate = (subjectId: number, topicId: number, field: 'certas' | 'erradas', value: string) => {
-    const numValue = Math.max(0, parseInt(value) || 0);
-    
-    // 1. Atualizar Tópico no Map local (proveniente da aba Disciplinas)
-    const subjectTopics = topicsMap[subjectId] || [];
-    const updatedTopics = subjectTopics.map(t => t.id === topicId ? { ...t, [field]: numValue } : t);
-    
-    setTopicsMap(prev => ({
-      ...prev,
-      [subjectId]: updatedTopics
-    }));
-
-    // 2. Persistir Tópicos no localStorage (mantendo integridade referencial)
-    localStorage.setItem(`elite_study_topics_${subjectId}`, JSON.stringify(updatedTopics));
-
-    // 3. Recalcular Totais da Disciplina AUTOMATICAMENTE
-    const totalCertas = updatedTopics.reduce((acc, t) => acc + (t.certas || 0), 0);
-    const totalErradas = updatedTopics.reduce((acc, t) => acc + (t.erradas || 0), 0);
-
-    // 4. Atualizar Disciplina no Estado e localStorage
-    const updatedSubjects = subjects.map(s => {
-      if (s.id === subjectId) {
-        return { ...s, certas: totalCertas, erradas: totalErradas };
-      }
-      return s;
-    });
-
-    setSubjects(updatedSubjects);
-    localStorage.setItem('elite_study_subjects', JSON.stringify(updatedSubjects));
-  };
+    return acc;
+  }, [] as GroupedSubject[]);
 
   const calculateTotal = (certas: number, erradas: number) => certas + erradas;
 
@@ -93,187 +82,161 @@ const PerformanceView: React.FC = () => {
     return 'text-red-500 bg-red-500/10 border-red-500/20';
   };
 
+  const getTrendIndicator = (percent: number, total: number) => {
+    if (total === 0) return { icon: <Minus size={14} />, label: 'Sem dados', color: 'text-slate-600' };
+    if (percent >= 85) return { icon: <TrendingUp size={14} />, label: 'Melhora', color: 'text-emerald-500' };
+    if (percent >= 70) return { icon: <Minus size={14} />, label: 'Estabilidade', color: 'text-blue-500' };
+    return { icon: <TrendingDown size={14} />, label: 'Queda', color: 'text-red-500' };
+  };
+
   const getPerformanceLabel = (percent: number) => {
     if (percent >= 80) return 'Excelente';
     if (percent >= 60) return 'Regular';
     return 'Insuficiente';
   };
 
+  const toggleExpand = (name: string) => {
+    setExpandedSubject(expandedSubject === name ? null : name);
+  };
+
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-6 pb-10 animate-in">
       <header>
-        <h2 className="text-3xl font-bold flex items-center gap-3">
-          <Calculator className="text-blue-500" />
-          Desempenho Operacional
-        </h2>
-        <p className="text-slate-400 mt-1">Status detalhado por assunto do edital.</p>
+        <div className="flex items-center gap-3">
+          <div className="bg-blue-600/20 p-2 rounded-xl text-blue-500">
+            <Calculator size={28} />
+          </div>
+          <div>
+            <h2 className="text-3xl font-bold">Desempenho Geral</h2>
+            <p className="text-slate-400 text-sm">Visão macro consolidada de todos os seus editais ativos.</p>
+          </div>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3 hover:border-blue-500/30 transition-colors">
-          <div className="bg-emerald-500/20 p-2 rounded-lg"><TrendingUp className="text-emerald-500" size={20} /></div>
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex items-center gap-4 hover:border-blue-500/30 transition-all shadow-lg">
+          <div className="bg-emerald-500/10 p-3 rounded-xl"><TrendingUp className="text-emerald-500" size={24} /></div>
           <div>
-            <Tooltip text="Meta mínima de aprovação para carreiras policiais.">
-              <p className="text-xs font-bold text-slate-500 uppercase">Aproveitamento Alvo</p>
+            <Tooltip text="Meta de excelência para concursos de alto nível.">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Status de Aprovação</p>
             </Tooltip>
-            <p className="text-lg font-bold">80%</p>
+            <p className="text-2xl font-black text-emerald-500">80% <span className="text-xs text-slate-500 font-medium">mínimo</span></p>
           </div>
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3 hover:border-blue-500/30 transition-colors">
-          <div className="bg-blue-500/20 p-2 rounded-lg"><CheckCircle2 className="text-blue-500" size={20} /></div>
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex items-center gap-4 hover:border-blue-500/30 transition-all shadow-lg">
+          <div className="bg-blue-500/10 p-3 rounded-xl"><CheckCircle2 className="text-blue-500" size={24} /></div>
           <div>
-            <Tooltip text="Soma automática de todos os acertos em todos os assuntos.">
-              <p className="text-xs font-bold text-slate-500 uppercase">Acertos Globais</p>
+            <Tooltip text="Soma total de acertos em todas as missões registradas.">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Acertos Globais</p>
             </Tooltip>
-            <p className="text-lg font-bold">{subjects.reduce((acc, curr) => acc + (curr.certas || 0), 0)}</p>
+            <p className="text-2xl font-black">{groupedSubjects.reduce((acc, curr) => acc + curr.certas, 0)}</p>
           </div>
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3 hover:border-blue-500/30 transition-colors">
-          <div className="bg-slate-800 p-2 rounded-lg"><AlertCircle className="text-slate-400" size={20} /></div>
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex items-center gap-4 hover:border-blue-500/30 transition-all shadow-lg">
+          <div className="bg-orange-500/10 p-3 rounded-xl"><Target className="text-orange-500" size={24} /></div>
           <div>
-            <Tooltip text="Média geral de rendimento baseada no edital verticalizado.">
-              <p className="text-xs font-bold text-slate-500 uppercase">Média Ponderada</p>
+            <Tooltip text="Média aritmética de rendimento baseada em questões consolidadas.">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Rendimento Médio</p>
             </Tooltip>
-            <p className="text-lg font-bold">
-              {subjects.length > 0 
-                ? Math.round(subjects.reduce((acc, curr) => acc + calculatePercent(curr.certas || 0, curr.erradas || 0), 0) / subjects.length) 
+            <p className="text-2xl font-black text-orange-500">
+              {groupedSubjects.length > 0 
+                ? Math.round(groupedSubjects.reduce((acc, curr) => acc + calculatePercent(curr.certas, curr.erradas), 0) / groupedSubjects.length) 
                 : 0}%
             </p>
           </div>
         </div>
       </div>
 
-      <div className="bg-blue-600/10 border border-blue-500/20 p-4 rounded-xl flex items-center gap-4">
-        <Info className="text-blue-500 shrink-0" size={20} />
-        <p className="text-xs text-slate-300">
-          Os subtópicos exibidos abaixo são sincronizados com o <strong>edital verticalizado</strong> na aba de Disciplinas. 
-          O desempenho geral da matéria é calculado <strong>automaticamente</strong> com base nos lançamentos individuais.
+      <div className="bg-blue-600/5 border border-blue-500/10 p-4 rounded-2xl flex items-center gap-4">
+        <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
+           <Info size={20} />
+        </div>
+        <p className="text-xs text-slate-400 font-medium leading-relaxed">
+          Os dados abaixo são sincronizados <strong>automaticamente</strong> conforme você preenche o desempenho nas abas individuais de cada Plano de Estudos. Esta é a sua visão estratégica macro.
         </p>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="text-[10px] text-slate-500 font-black uppercase bg-slate-800/50">
+            <thead className="text-[10px] text-slate-500 font-black uppercase bg-slate-800/30">
               <tr>
-                <th className="px-6 py-4">Disciplina</th>
-                <th className="px-6 py-4 text-center">Certas (Geral)</th>
-                <th className="px-6 py-4 text-center">Erradas (Geral)</th>
-                <th className="px-6 py-4 text-center">Total Questões</th>
-                <th className="px-6 py-4 text-center">Rendimento</th>
-                <th className="px-6 py-4 text-right">Detalhes</th>
+                <th className="px-8 py-5">Disciplina Consolidada</th>
+                <th className="px-6 py-5 text-center">Certas</th>
+                <th className="px-6 py-5 text-center">Erradas</th>
+                <th className="px-6 py-5 text-center">Percentual</th>
+                <th className="px-6 py-5 text-center">Evolução</th>
+                <th className="px-8 py-5 text-right">Origens</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
-              {subjects.map((item) => {
-                const total = calculateTotal(item.certas || 0, item.erradas || 0);
-                const percent = calculatePercent(item.certas || 0, item.erradas || 0);
+              {groupedSubjects.sort((a, b) => calculatePercent(b.certas, b.erradas) - calculatePercent(a.certas, a.erradas)).map((item) => {
+                const total = calculateTotal(item.certas, item.erradas);
+                const percent = calculatePercent(item.certas, item.erradas);
                 const statusColor = getPerformanceColor(percent);
-                const isExpanded = expandedSubject === item.id;
+                const trend = getTrendIndicator(percent, total);
+                const isExpanded = expandedSubject === item.name;
 
                 return (
-                  <React.Fragment key={item.id}>
+                  <React.Fragment key={item.name}>
                     <tr 
-                      className={`hover:bg-slate-800/30 transition-colors cursor-pointer ${isExpanded ? 'bg-slate-800/20' : ''}`}
-                      onClick={() => toggleExpand(item.id)}
+                      className={`hover:bg-slate-800/40 transition-all cursor-pointer group ${isExpanded ? 'bg-slate-800/30' : ''}`}
+                      onClick={() => toggleExpand(item.name)}
                     >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-1 rounded bg-slate-800 ${item.color}`}>
-                            <BookOpen size={14} />
+                      <td className="px-8 py-5">
+                        <div className="flex items-center gap-4">
+                          <div className={`p-2 rounded-xl bg-slate-800/50 ${item.color} group-hover:scale-110 transition-transform`}>
+                            <BookOpen size={16} />
                           </div>
-                          <p className="font-bold text-slate-200">{item.name}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex justify-center">
-                          <div className="w-20 bg-slate-950/50 border border-slate-800/50 rounded px-2 py-1 text-center text-emerald-400 font-mono text-sm opacity-60">
-                            {item.certas || 0}
+                          <div>
+                            <p className="font-bold text-slate-200 group-hover:text-blue-400 transition-colors">{item.name}</p>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase">{total} questões totais</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex justify-center">
-                          <div className="w-20 bg-slate-950/50 border border-slate-800/50 rounded px-2 py-1 text-center text-red-400 font-mono text-sm opacity-60">
-                            {item.erradas || 0}
-                          </div>
-                        </div>
+                      <td className="px-6 py-5 text-center font-mono text-emerald-400 font-bold">
+                        {item.certas}
                       </td>
-                      <td className="px-6 py-4 text-center font-bold text-slate-400 font-mono">
-                        {total}
+                      <td className="px-6 py-5 text-center font-mono text-red-400 font-bold">
+                        {item.erradas}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-5">
                         <div className="flex flex-col items-center gap-1">
-                          <div className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest font-mono ${statusColor}`}>
+                          <div className={`px-3 py-1 rounded-full border text-[10px] font-black tracking-widest font-mono ${statusColor}`}>
                             {Math.round(percent)}%
                           </div>
-                          <span className="text-[9px] text-slate-500 font-bold uppercase">{getPerformanceLabel(percent)}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end text-slate-500 group">
+                      <td className="px-6 py-5">
+                         <div className={`flex items-center justify-center gap-1.5 ${trend.color} text-[10px] font-black uppercase tracking-tighter`}>
+                            {trend.icon}
+                            <span>{trend.label}</span>
+                         </div>
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        <div className="flex justify-end text-slate-500">
                           {isExpanded ? <ChevronUp size={20} className="text-blue-500" /> : <ChevronDown size={20} />}
                         </div>
                       </td>
                     </tr>
                     
-                    {/* Lista Expansível de Assuntos Sincronizados */}
                     {isExpanded && (
-                      <tr className="bg-slate-950/40 border-l-2 border-l-blue-600 animate-in">
-                        <td colSpan={6} className="px-6 py-4">
+                      <tr className="bg-slate-950/40 border-l-4 border-l-blue-600 animate-in slide-in-from-left-2">
+                        <td colSpan={6} className="px-8 py-6">
                           <div className="space-y-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <Target size={14} className="text-blue-500" />
-                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Controle de Assuntos (Sincronizado)</h4>
-                              </div>
+                            <div className="flex items-center gap-2">
+                              <Layers size={14} className="text-blue-500" />
+                              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Planos de Estudo Vinculados</h4>
                             </div>
-                            
-                            <div className="grid grid-cols-1 gap-2">
-                              {(topicsMap[item.id] || []).map(topic => (
-                                <div key={topic.id} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-800/50 hover:border-slate-700 transition-colors">
-                                  <div className="flex-1 mr-4">
-                                    <p className="text-sm font-bold text-slate-300">{topic.title}</p>
-                                    <div className="flex items-center gap-2 mt-1">
-                                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${topic.status === 'CONCLUIDO' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-800 text-slate-500'}`}>
-                                          {topic.status === 'CONCLUIDO' ? 'BATIDO' : 'EM PAUTA'}
-                                       </span>
-                                       <span className="text-[9px] text-slate-600 font-bold uppercase tracking-tighter">
-                                          Total: {(topic.certas || 0) + (topic.erradas || 0)} questões
-                                       </span>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-4">
-                                    <div className="flex flex-col items-center">
-                                      <label className="text-[8px] font-black text-emerald-600 uppercase mb-1">Certas</label>
-                                      <input 
-                                        type="number"
-                                        min="0"
-                                        value={topic.certas || 0}
-                                        onChange={(e) => handleTopicUpdate(item.id, topic.id, 'certas', e.target.value)}
-                                        className="w-16 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-center text-emerald-400 font-mono text-xs outline-none focus:border-emerald-500 transition-colors"
-                                      />
-                                    </div>
-                                    <div className="flex flex-col items-center">
-                                      <label className="text-[8px] font-black text-red-600 uppercase mb-1">Erradas</label>
-                                      <input 
-                                        type="number"
-                                        min="0"
-                                        value={topic.erradas || 0}
-                                        onChange={(e) => handleTopicUpdate(item.id, topic.id, 'erradas', e.target.value)}
-                                        className="w-16 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-center text-red-400 font-mono text-xs outline-none focus:border-red-500 transition-colors"
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
+                            <div className="flex flex-wrap gap-2">
+                              {item.plans.map(pName => (
+                                <span key={pName} className="bg-blue-600/10 text-blue-400 px-4 py-1.5 rounded-xl text-[10px] font-bold border border-blue-500/20 shadow-sm">
+                                  {pName}
+                                </span>
                               ))}
-                              
-                              {(topicsMap[item.id]?.length === 0) && (
-                                <div className="p-4 text-center border border-dashed border-slate-800 rounded-lg">
-                                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Acesse a aba 'Disciplinas' para cadastrar os assuntos deste edital.</p>
-                                </div>
-                              )}
+                            </div>
+                            <div className="pt-2">
+                               <p className="text-[9px] text-slate-600 font-bold uppercase">Nota: O desempenho adaptativo individual continua sendo processado separadamente por plano.</p>
                             </div>
                           </div>
                         </td>
@@ -282,10 +245,10 @@ const PerformanceView: React.FC = () => {
                   </React.Fragment>
                 );
               })}
-              {subjects.length === 0 && (
+              {groupedSubjects.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-slate-500 font-medium">
-                    Nenhuma disciplina operacional cadastrada no sistema.
+                  <td colSpan={6} className="px-6 py-20 text-center text-slate-500 font-black uppercase tracking-widest text-xs">
+                    Nenhum dado consolidado operacional. Inicie os registros nos planos.
                   </td>
                 </tr>
               )}
@@ -294,24 +257,33 @@ const PerformanceView: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex flex-col md:flex-row gap-8 items-center justify-between">
-        <div className="space-y-2">
-          <h4 className="font-bold flex items-center gap-2 uppercase tracking-widest text-xs text-slate-400">
-            <Calculator size={14} className="text-blue-500" />
-            Legenda de Status Operacional
-          </h4>
-          <div className="flex flex-wrap gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-emerald-500" />
-              <span className="text-[10px] text-slate-400 font-bold uppercase">≥ 80% (Aptidão Máxima)</span>
+      <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl flex flex-col md:flex-row gap-10 items-center justify-between shadow-inner">
+        <div className="space-y-3 w-full">
+          <div className="flex items-center gap-2">
+            <TrendingUp size={16} className="text-blue-500" />
+            <h4 className="font-black uppercase tracking-widest text-xs text-slate-400">Indicadores de Evolução Consolidada</h4>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="flex items-center gap-3 bg-slate-950/50 p-3 rounded-2xl border border-slate-800/50">
+              <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500"><TrendingUp size={16} /></div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-black uppercase block">Melhora</span>
+                <span className="text-[9px] text-slate-600 font-bold">Rendimento acima de 85%</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-orange-500" />
-              <span className="text-[10px] text-slate-400 font-bold uppercase">60-79% (Alerta: Reforçar)</span>
+            <div className="flex items-center gap-3 bg-slate-950/50 p-3 rounded-2xl border border-slate-800/50">
+              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-500"><Minus size={16} /></div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-black uppercase block">Estabilidade</span>
+                <span className="text-[9px] text-slate-600 font-bold">Rendimento entre 70-84%</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500" />
-              <span className="text-[10px] text-slate-400 font-bold uppercase">&lt; 60% (Risco de Reprovação)</span>
+            <div className="flex items-center gap-3 bg-slate-950/50 p-3 rounded-2xl border border-slate-800/50">
+              <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center text-red-500"><TrendingDown size={16} /></div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-black uppercase block">Queda</span>
+                <span className="text-[9px] text-slate-600 font-bold">Rendimento abaixo de 70%</span>
+              </div>
             </div>
           </div>
         </div>

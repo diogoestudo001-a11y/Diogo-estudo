@@ -56,7 +56,7 @@ const AppContent: React.FC = () => {
           <SidebarItem to="/" icon={<LayoutDashboard size={20} />} label="Dashboard" active={location.pathname === '/'} />
           <SidebarItem to="/exams" icon={<Search size={20} />} label="Editais" active={location.pathname === '/exams'} />
           <SidebarItem to="/subjects" icon={<BookOpen size={20} />} label="Plano de Estudos" active={location.pathname.startsWith('/subjects')} />
-          <SidebarItem to="/performance" icon={<BarChart3 size={20} />} label="Desempenho" active={location.pathname === '/performance'} />
+          <SidebarItem to="/performance" icon={<BarChart3 size={20} />} label="Desempenho Geral" active={location.pathname === '/performance'} />
           <SidebarItem to="/timer" icon={<Timer size={20} />} label="Cronômetro" active={location.pathname === '/timer'} />
           <SidebarItem to="/history" icon={<History size={20} />} label="Histórico" active={location.pathname === '/history'} />
           <SidebarItem to="/arch" icon={<FileText size={20} />} label="Arquitetura App" active={location.pathname === '/arch'} />
