@@ -1,14 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Save, 
   CheckCircle2, 
-  XCircle, 
   Calculator, 
   TrendingUp, 
   AlertCircle 
 } from 'lucide-react';
-import { DifficultyLevel } from '../types';
+import Tooltip from '../components/Tooltip';
 
 interface DisciplinePerformance {
   id: string;
@@ -18,7 +17,6 @@ interface DisciplinePerformance {
 }
 
 const PerformanceView: React.FC = () => {
-  // Dados iniciais das disciplinas (mockando o que viria do banco de dados/Room)
   const [performances, setPerformances] = useState<DisciplinePerformance[]>([
     { id: '1', name: 'Língua Portuguesa', correct: 150, wrong: 30 },
     { id: '2', name: 'Direito Penal', correct: 220, wrong: 45 },
@@ -39,10 +37,7 @@ const PerformanceView: React.FC = () => {
   };
 
   const handleSave = (id: string) => {
-    // Aqui seria a chamada para o Room (DAO update)
     const item = performances.find(p => p.id === id);
-    console.log(`Salvando desempenho da disciplina ${id}:`, item);
-    
     setSaveStatus(id);
     setTimeout(() => setSaveStatus(null), 2000);
   };
@@ -77,26 +72,31 @@ const PerformanceView: React.FC = () => {
         <p className="text-slate-400 mt-1">Controle estatístico de acertos e erros por disciplina.</p>
       </header>
 
-      {/* Informativo de Metas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3">
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3 hover:border-blue-500/30 transition-colors">
           <div className="bg-emerald-500/20 p-2 rounded-lg"><TrendingUp className="text-emerald-500" size={20} /></div>
           <div>
-            <p className="text-xs font-bold text-slate-500 uppercase">Meta Operacional</p>
+            <Tooltip text="Mínimo aceitável para aprovação em concursos de alto nível.">
+              <p className="text-xs font-bold text-slate-500 uppercase">Meta Operacional</p>
+            </Tooltip>
             <p className="text-lg font-bold">Mínimo 80%</p>
           </div>
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3">
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3 hover:border-blue-500/30 transition-colors">
           <div className="bg-blue-500/20 p-2 rounded-lg"><CheckCircle2 className="text-blue-500" size={20} /></div>
           <div>
-            <p className="text-xs font-bold text-slate-500 uppercase">Total de Acertos</p>
+            <Tooltip text="Soma de todas as questões respondidas corretamente.">
+              <p className="text-xs font-bold text-slate-500 uppercase">Total de Acertos</p>
+            </Tooltip>
             <p className="text-lg font-bold">{performances.reduce((acc, curr) => acc + curr.correct, 0)}</p>
           </div>
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3">
+        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-3 hover:border-blue-500/30 transition-colors">
           <div className="bg-slate-800 p-2 rounded-lg"><AlertCircle className="text-slate-400" size={20} /></div>
           <div>
-            <p className="text-xs font-bold text-slate-500 uppercase">Média Geral</p>
+            <Tooltip text="Média percentual ponderada de todas as matérias.">
+              <p className="text-xs font-bold text-slate-500 uppercase">Média Geral</p>
+            </Tooltip>
             <p className="text-lg font-bold">
               {Math.round(performances.reduce((acc, curr) => acc + calculatePercent(curr.correct, curr.wrong), 0) / performances.length)}%
             </p>
@@ -104,11 +104,10 @@ const PerformanceView: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabela de Desempenho */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="text-xs text-slate-500 font-bold uppercase bg-slate-800/50">
+            <thead className="text-[10px] text-slate-500 font-black uppercase bg-slate-800/50">
               <tr>
                 <th className="px-6 py-4">Disciplina</th>
                 <th className="px-6 py-4 text-center">Certas</th>
@@ -149,12 +148,12 @@ const PerformanceView: React.FC = () => {
                         />
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center font-bold text-slate-400">
+                    <td className="px-6 py-4 text-center font-bold text-slate-400 font-mono">
                       {total}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col items-center gap-1">
-                        <div className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest ${statusColor}`}>
+                        <div className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest font-mono ${statusColor}`}>
                           {Math.round(percent)}%
                         </div>
                         <span className="text-[9px] text-slate-500 font-bold uppercase">{getPerformanceLabel(percent)}</span>
@@ -163,10 +162,10 @@ const PerformanceView: React.FC = () => {
                     <td className="px-6 py-4 text-right">
                       <button 
                         onClick={() => handleSave(item.id)}
-                        className={`p-2 rounded-lg transition-all ${
+                        className={`p-2 rounded-lg transition-all transform active:scale-90 ${
                           saveStatus === item.id 
                             ? 'bg-emerald-600 text-white' 
-                            : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-blue-600'
+                            : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-blue-600 shadow-lg'
                         }`}
                       >
                         {saveStatus === item.id ? <CheckCircle2 size={18} /> : <Save size={18} />}
@@ -180,30 +179,29 @@ const PerformanceView: React.FC = () => {
         </div>
       </div>
 
-      {/* Legend / Feedback Section */}
       <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex flex-col md:flex-row gap-8 items-center justify-between">
         <div className="space-y-2">
-          <h4 className="font-bold flex items-center gap-2">
-            <Calculator size={18} className="text-blue-500" />
-            Legenda de Prontidão
+          <h4 className="font-bold flex items-center gap-2 uppercase tracking-widest text-xs text-slate-400">
+            <Calculator size={14} className="text-blue-500" />
+            Legenda de Prontidão Operacional
           </h4>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-emerald-500" />
-              <span className="text-xs text-slate-400 font-medium">≥ 80% (Pronto para o Combate)</span>
+              <span className="text-[10px] text-slate-400 font-bold uppercase">≥ 80% (Pronto para o Combate)</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-orange-500" />
-              <span className="text-xs text-slate-400 font-medium">60-79% (Reforçar Teoria)</span>
+              <span className="text-[10px] text-slate-400 font-bold uppercase">60-79% (Reforçar Teoria)</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-red-500" />
-              <span className="text-xs text-slate-400 font-medium">&lt; 60% (Revisão Imediata)</span>
+              <span className="text-[10px] text-slate-400 font-bold uppercase">&lt; 60% (Revisão Imediata)</span>
             </div>
           </div>
         </div>
         
-        <div className="text-right">
+        <div className="text-right border-l border-slate-800 pl-6 hidden md:block">
           <p className="text-xs text-slate-500 font-bold italic">"O treinamento difícil torna o combate fácil."</p>
         </div>
       </div>

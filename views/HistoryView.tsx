@@ -9,6 +9,7 @@ import {
   Filter,
   Download
 } from 'lucide-react';
+import Tooltip from '../components/Tooltip';
 
 const HistoryView: React.FC = () => {
   const history = [
@@ -19,6 +20,14 @@ const HistoryView: React.FC = () => {
     { id: 5, subject: 'Criminologia', topic: 'Escolas Criminológicas', duration: '1h 00m', questions: 10, correct: 9, date: '10 Out, 18:30' }
   ];
 
+  const handleDownloadReport = () => {
+    alert("Gerando PDF operacional do histórico de estudos...");
+  };
+
+  const handleFilterDate = () => {
+    alert("Seletor de data em desenvolvimento.");
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -27,10 +36,16 @@ const HistoryView: React.FC = () => {
           <p className="text-slate-400">Seu log de operações e desempenho em questões</p>
         </div>
         <div className="flex space-x-2">
-          <button className="bg-slate-900 border border-slate-800 text-slate-400 p-2 rounded-lg hover:text-white transition-colors">
+          <button 
+            onClick={handleDownloadReport}
+            className="bg-slate-900 border border-slate-800 text-slate-400 p-2 rounded-lg hover:text-blue-400 hover:border-blue-500/30 transition-all active:scale-90"
+          >
             <Download size={20} />
           </button>
-          <button className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-lg text-sm font-bold flex items-center space-x-2 hover:bg-slate-800 transition-colors">
+          <button 
+            onClick={handleFilterDate}
+            className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-lg text-sm font-bold flex items-center space-x-2 hover:bg-slate-800 hover:border-blue-500/30 transition-all active:scale-95"
+          >
             <Calendar size={18} />
             <span>Outubro 2023</span>
           </button>
@@ -39,14 +54,16 @@ const HistoryView: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Sessões', value: '42', icon: <Clock />, color: 'text-blue-500' },
-          { label: 'Tempo Médio', value: '1h 25m', icon: <ArrowUpRight />, color: 'text-emerald-500' },
-          { label: 'Acertos', value: '82%', icon: <FileCheck />, color: 'text-orange-500' },
-          { label: 'Falhas', value: '18%', icon: <ArrowDownRight />, color: 'text-red-500' }
+          { label: 'Sessões', value: '42', icon: <Clock />, color: 'text-blue-500', tip: 'Número total de ciclos de estudo finalizados.' },
+          { label: 'Tempo Médio', value: '1h 25m', icon: <ArrowUpRight />, color: 'text-emerald-500', tip: 'Média de duração das sessões de foco.' },
+          { label: 'Acertos', value: '82%', icon: <FileCheck />, color: 'text-orange-500', tip: 'Média de desempenho global em questões.' },
+          { label: 'Falhas', value: '18%', icon: <ArrowDownRight />, color: 'text-red-500', tip: 'Percentual de erros que precisam de revisão.' }
         ].map((stat, i) => (
-          <div key={i} className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <div key={i} className="bg-slate-900 border border-slate-800 p-4 rounded-xl hover:border-blue-500/30 transition-colors cursor-default">
             <div className="flex justify-between items-start">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{stat.label}</span>
+              <Tooltip text={stat.tip}>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{stat.label}</span>
+              </Tooltip>
               <div className={stat.color}>{stat.icon}</div>
             </div>
             <p className="text-xl font-bold mt-2">{stat.value}</p>
@@ -54,15 +71,20 @@ const HistoryView: React.FC = () => {
         ))}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-          <h3 className="font-bold">Log de Estudos</h3>
-          <button className="text-slate-400 hover:text-white transition-colors"><Filter size={20} /></button>
+          <h3 className="font-bold uppercase tracking-widest text-xs text-slate-500">Log de Estudos Recentes</h3>
+          <button 
+            onClick={() => alert("Filtros de disciplina em desenvolvimento.")}
+            className="text-slate-400 hover:text-white transition-colors p-1"
+          >
+            <Filter size={20} />
+          </button>
         </div>
         
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="text-xs text-slate-500 font-bold uppercase bg-slate-800/50">
+            <thead className="text-[10px] text-slate-500 font-black uppercase bg-slate-800/50">
               <tr>
                 <th className="px-6 py-4">Disciplina / Tópico</th>
                 <th className="px-6 py-4">Duração</th>
@@ -73,12 +95,16 @@ const HistoryView: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-800">
               {history.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-800/30 transition-colors group">
+                <tr 
+                  key={item.id} 
+                  className="hover:bg-blue-500/5 transition-colors group cursor-pointer"
+                  onClick={() => alert(`Visualizando detalhes da sessão: ${item.topic}`)}
+                >
                   <td className="px-6 py-5">
                     <p className="font-bold text-slate-200 group-hover:text-blue-400 transition-colors">{item.subject}</p>
                     <p className="text-xs text-slate-500">{item.topic}</p>
                   </td>
-                  <td className="px-6 py-5 text-sm font-medium text-slate-400">
+                  <td className="px-6 py-5 text-sm font-medium text-slate-400 font-mono">
                     {item.duration}
                   </td>
                   <td className="px-6 py-5">
@@ -94,7 +120,7 @@ const HistoryView: React.FC = () => {
                           style={{ width: `${(item.correct / item.questions) * 100}%` }}
                         />
                       </div>
-                      <span className="text-sm font-bold">{Math.round((item.correct / item.questions) * 100)}%</span>
+                      <span className="text-sm font-bold font-mono">{Math.round((item.correct / item.questions) * 100)}%</span>
                     </div>
                   </td>
                   <td className="px-6 py-5 text-xs font-medium text-slate-500">
@@ -107,7 +133,12 @@ const HistoryView: React.FC = () => {
         </div>
         
         <div className="p-4 bg-slate-800/30 text-center">
-          <button className="text-sm font-bold text-blue-500 hover:underline">Carregar mais logs</button>
+          <button 
+            onClick={() => alert("Buscando mais registros do servidor/local...")}
+            className="text-xs font-black uppercase tracking-widest text-blue-500 hover:text-blue-400 transition-colors"
+          >
+            Carregar mais logs operativos
+          </button>
         </div>
       </div>
     </div>
